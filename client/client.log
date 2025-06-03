@@ -1,0 +1,16 @@
+2025-06-04 02:20:09,732 - __main__ - INFO - System tray initialized
+2025-06-04 02:20:09,807 - __main__ - INFO - Keyboard blocker installed
+2025-06-04 02:20:09,808 - __main__ - INFO - NetCafe Client initialized. Computer ID: DESKTOP-AU7O0H3_190032518091308
+2025-06-04 02:20:09,811 - __main__ - INFO - Status: Initializing... (Connected: False)
+2025-06-04 02:20:09,932 - __main__ - INFO - Connecting to server: http://localhost:8080
+2025-06-04 02:20:09,933 - __main__ - INFO - Status: Connecting to server... (Connected: False)
+2025-06-04 02:20:12,294 - __main__ - ERROR - Connection error: Cannot connect to host localhost:8080 ssl:default [The remote computer refused the network connection]
+2025-06-04 02:20:12,295 - __main__ - INFO - Status: Connection failed (attempt 1) (Connected: False)
+2025-06-04 02:20:12,306 - __main__ - INFO - Reconnecting in 8.0s
+2025-06-04 02:20:20,305 - __main__ - INFO - Attempting reconnection...
+2025-06-04 02:20:20,305 - __main__ - INFO - Connecting to server: http://localhost:8080
+2025-06-04 02:20:20,306 - __main__ - INFO - Status: Connecting to server... (Connected: False)
+2025-06-04 02:20:22,561 - __main__ - ERROR - Connection error: Cannot connect to host localhost:8080 ssl:default [The remote computer refused the network connection]
+2025-06-04 02:20:22,562 - __main__ - INFO - Status: Connection failed (attempt 2) (Connected: False)
+2025-06-04 02:20:22,563 - __main__ - INFO - Reconnecting in 11.0s
+2025-06-04 02:20:25,923 - __main__ - INFO - Cleanup completed

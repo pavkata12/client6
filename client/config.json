@@ -1,0 +1,38 @@
+{
+    "server": {
+      "host": "localhost",
+      "port": 8080,
+      "websocket_endpoint": "/ws",
+      "reconnect_interval": 5,
+      "max_reconnect_attempts": 10
+    },
+    "client": {
+      "auto_start": true,
+      "auto_reconnect": true,
+      "max_reconnect_attempts": 10,
+      "debug": true,
+      "minimize_to_tray": true,
+      "show_timer_overlay": true,
+      "timer_position": {
+        "x": 200,
+        "y": 40
+      }
+    },
+    "ui": {
+      "timer_position": {
+        "x": 200,
+        "y": 40
+      },
+      "notifications": true,
+      "gaming_theme": true,
+      "timer_font_size": 60,
+      "status_font_size": 18,
+      "timer_opacity": 0.9
+    },
+    "security": {
+      "block_windows_key": true,
+      "block_ctrl_esc": true,
+      "block_alt_f4": true,
+      "full_screen_lock": true
+    }
+  }
