@@ -1,0 +1,5 @@
+PySide6>=6.5.0
+aiohttp>=3.8.0
+qasync>=0.24.0
+pywin32>=306
+Pillow>=10.0.0 
