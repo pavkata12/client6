@@ -1,0 +1,38 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 8080,
+    "websocket_endpoint": "/ws",
+    "reconnect_interval": 5,
+    "max_reconnect_attempts": 10
+  },
+  "client": {
+    "computer_id": "",
+    "auto_start": true,
+    "minimize_to_tray": true,
+    "show_timer_overlay": true,
+    "timer_position": {
+      "x": 200,
+      "y": 40
+    }
+  },
+  "security": {
+    "block_windows_key": true,
+    "block_ctrl_esc": true,
+    "block_alt_f4": true,
+    "full_screen_lock": true
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "client.log",
+    "max_size_mb": 10,
+    "backup_count": 5
+  },
+  "ui": {
+    "timer_font_size": 60,
+    "status_font_size": 18,
+    "timer_opacity": 0.9,
+    "lock_screen_message": "Session not active",
+    "notifications": true
+  }
+}

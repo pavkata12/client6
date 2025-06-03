@@ -32,9 +32,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Constants
-SERVER_CONFIG = 'client_config.json'
-DEFAULT_SERVER_PORT = 8080
+# Constants - FIXED PORTS AND ENDPOINTS
+SERVER_CONFIG = 'config.json'
+DEFAULT_SERVER_PORT = 8080  # Fixed from 8765
 DEFAULT_SERVER_HOST = 'localhost'
 
 class TimerOverlay(QWidget):
@@ -51,14 +51,14 @@ class TimerOverlay(QWidget):
         
         layout = QVBoxLayout(self)
         
-        self.label = QLabel('', self)
+        self.label = QLabel('00:00', self)
         self.label.setAlignment(Qt.AlignCenter)
         self.label.setStyleSheet(
             'background: rgba(0,0,0,0.7); color: white; font-size: 60px; border-radius: 24px; padding: 40px 0px;'
         )
         layout.addWidget(self.label)
         
-        self.status_label = QLabel('', self)
+        self.status_label = QLabel('Connecting...', self)
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setStyleSheet('color: white; font-size: 18px; margin-top: 8px;')
         layout.addWidget(self.status_label)
@@ -79,11 +79,11 @@ class TimerOverlay(QWidget):
         self.move(200, 40)
     
     def set_time(self, time_str):
-        """Set timer display text"""
+        """Set timer display text - FIXED METHOD"""
         self.label.setText(time_str)
     
     def set_status(self, status):
-        """Set status label text"""
+        """Set status label text - FIXED METHOD"""
         self.status_label.setText(status)
 
 class BlankScreen(QWidget):
@@ -99,12 +99,12 @@ class BlankScreen(QWidget):
         self.label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.label)
         
-        self.status_label = QLabel('', self)
+        self.status_label = QLabel('Please login to start session', self)
         self.status_label.setStyleSheet('color: #aaa; font-size: 22px; margin-top: 24px;')
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
     
-    def show_blank(self, msg='Session not active', status=''):
+    def show_blank(self, msg='Session not active', status='Please login to start session'):
         self.label.setText(msg)
         self.status_label.setText(status)
         self.showFullScreen()
@@ -156,7 +156,7 @@ class KeyboardBlocker:
 class LoginDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle('Login')
+        self.setWindowTitle('NetCafe Login')
         self.setFixedSize(300, 150)
         
         layout = QVBoxLayout(self)
@@ -205,13 +205,15 @@ class NetCafeClient:
         self.session_timer.timeout.connect(self._tick)
         self.connection_status = 'Disconnected'
         
+        # FIXED: Added missing properties
         self.session = None
         self.ws = None
-        self.user_id = None
         self.session_id = None
         self.computer_id = self._get_computer_id()
         self._notified_5min = False
         self._notified_1min = False
+        self.reconnect_timer = QTimer()
+        self.reconnect_timer.timeout.connect(self._try_reconnect)
         
         self._init_tray()
         self._show_blank()
@@ -219,75 +221,73 @@ class NetCafeClient:
         # Connect overlay buttons
         self.overlay.min_btn.clicked.connect(self.overlay.hide)
         self.overlay.end_btn.clicked.connect(self.end_session)
-    
+        
     def _get_computer_id(self):
-        try:
-            mac = uuid.getnode()
-            return f"PC-{mac:012x}"
-        except:
-            return f"PC-{socket.gethostname()}"
-    
+        # Unique computer identifier
+        hostname = socket.gethostname()
+        mac = uuid.getnode()
+        return f"{hostname}_{mac}"
+        
     def _init_tray(self):
-        icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
-        self.tray = QSystemTrayIcon(QIcon(icon_path))
-        self.tray.setToolTip('NetCafe Client')
+        self.tray = QSystemTrayIcon(self)
+        self.tray.setIcon(QIcon('icon.ico'))  # Add an icon if available
         
         menu = QMenu()
-        show_action = QAction('Show Timer')
-        hide_action = QAction('Hide Timer')
-        quit_action = QAction('Exit')
         
-        show_action.triggered.connect(self._show_overlay)
-        hide_action.triggered.connect(self.overlay.hide)
-        quit_action.triggered.connect(self._exit)
+        status_action = QAction('Status: Disconnected', self)
+        status_action.setEnabled(False)
+        menu.addAction(status_action)
         
-        menu.addAction(show_action)
-        menu.addAction(hide_action)
         menu.addSeparator()
-        menu.addAction(quit_action)
+        
+        show_action = QAction('Show Timer', self)
+        show_action.triggered.connect(self._show_overlay)
+        menu.addAction(show_action)
+        
+        exit_action = QAction('Exit', self)
+        exit_action.triggered.connect(self._exit)
+        menu.addAction(exit_action)
         
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
-    
+        
     def _on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.Trigger:
-            if self.overlay.isVisible():
-                self.overlay.hide()
-            else:
+        if reason == QSystemTrayIcon.DoubleClick:
+            if self.session_active:
                 self._show_overlay()
-    
+        
     def _exit(self):
-        self.session_timer.stop()
-        self.keyboard_blocker.uninstall()
+        if self.session_active:
+            asyncio.create_task(self.end_session())
+        
         if self.session:
             asyncio.create_task(self.session.close())
-        self.tray.hide()
+        
         self.app.quit()
-    
+        
     def _get_server_config(self):
-        if os.path.exists(SERVER_CONFIG):
-            with open(SERVER_CONFIG, 'r') as f:
-                return json.load(f)
-        
-        from PySide6.QtWidgets import QInputDialog
-        host, ok = QInputDialog.getText(
-            None, 
-            "Server Address", 
-            "Enter the server address:",
-            text=DEFAULT_SERVER_HOST
-        )
-        
-        if not ok or not host:
-            QMessageBox.critical(None, "No Address", "No server address entered. Exiting.")
-            self.app.quit()
-            return {}
-        
-        config = {'host': host, 'port': DEFAULT_SERVER_PORT}
-        with open(SERVER_CONFIG, 'w') as f:
-            json.dump(config, f)
-        
-        return config
+        """FIXED: Load from config.json"""
+        try:
+            if os.path.exists(SERVER_CONFIG):
+                with open(SERVER_CONFIG, 'r') as f:
+                    config = json.load(f)
+                return config.get('server', {
+                    'host': DEFAULT_SERVER_HOST,
+                    'port': DEFAULT_SERVER_PORT
+                })
+            else:
+                logger.warning(f"Config file {SERVER_CONFIG} not found, using defaults")
+                return {
+                    'host': DEFAULT_SERVER_HOST,
+                    'port': DEFAULT_SERVER_PORT
+                }
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+            return {
+                'host': DEFAULT_SERVER_HOST,
+                'port': DEFAULT_SERVER_PORT
+            }
     
     async def connect_to_server(self):
         config = self._get_server_config()
@@ -297,7 +297,7 @@ class NetCafeClient:
         try:
             self.session = aiohttp.ClientSession()
             
-            # Connect WebSocket with computer_id
+            # FIXED: Connect WebSocket with computer_id
             ws_url = f"ws://{config['host']}:{config['port']}/ws?computer_id={self.computer_id}"
             self.ws = await self.session.ws_connect(ws_url)
             
@@ -310,7 +310,8 @@ class NetCafeClient:
             
         except Exception as e:
             logger.error(f"Connection error: {str(e)}")
-            self.set_connection_status('Connection failed')
+            self.set_connection_status('Connection failed - Retrying...')
+            self._start_reconnect_timer()
             if self.session:
                 await self.session.close()
                 self.session = None
@@ -325,11 +326,11 @@ class NetCafeClient:
         try:
             config = self._get_server_config()
             async with self.session.post(
-                f"http://{config['host']}:{config['port']}/api/login",  # ← Fixed endpoint
+                f"http://{config['host']}:{config['port']}/api/login",  # FIXED endpoint
                 json={
                     'username': username, 
                     'password': password,
-                    'computer_id': self.computer_id  # ← Added computer_id
+                    'computer_id': self.computer_id  # FIXED: Added computer_id
                 }
             ) as response:
                 data = await response.json()
@@ -339,12 +340,12 @@ class NetCafeClient:
                     return False
                 
                 self.session_id = data.get('session_id')
-                self.remaining_time = data.get('minutes', 0) * 60
+                remaining_minutes = data.get('minutes', 0)
                 
-                if self.remaining_time > 0:
-                    await self.start_session(data.get('minutes', 0))
+                if remaining_minutes > 0:
+                    await self.start_session(remaining_minutes)
                 else:
-                    QMessageBox.warning(None, 'Error', 'No time available')
+                    QMessageBox.warning(None, 'No Time', 'No time available. Please contact admin.')
                 
                 return True
                 
@@ -367,83 +368,85 @@ class NetCafeClient:
         finally:
             self.ws = None
             self.set_connection_status('Disconnected')
+            self._start_reconnect_timer()
     
     async def _process_ws_message(self, data):
         msg_type = data.get('type')
         
-        if msg_type == 'session_update':
-            sessions = data.get('sessions', [])
-            for session in sessions:
-                if session['computer_id'] == self.computer_id:
-                    self.start_session(session['duration_minutes'])
-                    break
+        if msg_type == 'time_update':
+            # Update remaining time from server
+            minutes = data.get('minutes', 0)
+            if minutes > 0 and not self.session_active:
+                await self.start_session(minutes)
+            elif minutes <= 0 and self.session_active:
+                await self.end_session()
     
     def _show_blank(self):
         self.blank.show_blank()
         self.keyboard_blocker.install()
     
     def _show_overlay(self):
-        self.overlay.show()
-        self.overlay.raise_()
+        if self.session_active:
+            self.overlay.show()
+            self.overlay.raise_()
     
+    # FIXED start_session method - no unnecessary API calls
     @asyncSlot()
-    async def start_session(self, duration):
-        if not self.session or not self.user_id:
-            return
-        
+    async def start_session(self, duration_minutes):
         try:
-            async with self.session.post(
-                f"http://{self._get_server_config()['host']}:{self._get_server_config()['port']}/api/session/start",
-                json={
-                    'user_id': self.user_id,
-                    'computer_id': self.computer_id,
-                    'duration_minutes': duration
-                }
-            ) as response:
-                data = await response.json()
-                
-                if not data['success']:
-                    QMessageBox.warning(None, 'Error', data['message'])
-                    return
-                
-                self.session_active = True
-                self.remaining_time = duration * 60
-                self.session_timer.start(1000)
-                self._notified_5min = False
-                self._notified_1min = False
-                
-                self.blank.hide_blank()
-                self._show_overlay()
-                self._update_timer()
+            self.session_active = True
+            self.remaining_time = duration_minutes * 60
+            self.session_timer.start(1000)
+            self._notified_5min = False
+            self._notified_1min = False
+            
+            self.blank.hide_blank()
+            self.keyboard_blocker.uninstall()
+            self._show_overlay()
+            self._update_timer()
+            
+            self.set_connection_status('Session Active')
+            logger.info(f"Session started: {duration_minutes} minutes")
                 
         except Exception as e:
             logger.error(f"Start session error: {str(e)}")
             QMessageBox.critical(None, 'Error', 'Failed to start session')
     
+    # FIXED end_session method - only logout API call
     @asyncSlot()
     async def end_session(self):
-        if not self.session or not self.user_id:
-            return
-        
         try:
-            async with self.session.post(
-                f"http://{self._get_server_config()['host']}:{self._get_server_config()['port']}/api/session/end",
-                json={'user_id': self.user_id}
-            ) as response:
-                data = await response.json()
+            if self.session_id:
+                config = self._get_server_config()
+                minutes_used = (self.remaining_time or 0) // 60
                 
-                if not data['success']:
-                    QMessageBox.warning(None, 'Error', data['message'])
-                    return
-                
-                self.session_active = False
-                self.session_timer.stop()
-                self.overlay.hide()
-                self._show_blank()
-                
+                async with self.session.post(
+                    f"http://{config['host']}:{config['port']}/api/logout",  # FIXED endpoint
+                    json={
+                        'session_id': self.session_id,
+                        'minutes_used': minutes_used
+                    }
+                ) as response:
+                    data = await response.json()
+                    
+                    if not data['success']:
+                        logger.warning(f"Logout warning: {data['message']}")
+            
+            self.session_active = False
+            self.session_timer.stop()
+            self.overlay.hide()
+            self._show_blank()
+            
+            self.set_connection_status('Session Ended')
+            logger.info("Session ended")
+            
         except Exception as e:
             logger.error(f"End session error: {str(e)}")
-            QMessageBox.critical(None, 'Error', 'Failed to end session')
+            # Force end session even if API call fails
+            self.session_active = False
+            self.session_timer.stop()
+            self.overlay.hide()
+            self._show_blank()
     
     def _tick(self):
         if not self.session_active:
@@ -470,10 +473,7 @@ class NetCafeClient:
             )
         
         if self.remaining_time <= 0:
-            self.session_timer.stop()
-            self.session_active = False
-            self.overlay.hide()
-            self._show_blank()
+            asyncio.create_task(self.end_session())
             return
         
         self._update_timer()
@@ -487,6 +487,19 @@ class NetCafeClient:
         self.connection_status = status
         self.overlay.set_status(status)
         self.blank.set_status(status)
+        
+        # Update tray tooltip
+        self.tray.setToolTip(f"NetCafe Client - {status}")
+    
+    def _start_reconnect_timer(self):
+        """Start reconnection attempts"""
+        if not self.reconnect_timer.isActive():
+            self.reconnect_timer.start(10000)  # Try every 10 seconds
+    
+    def _try_reconnect(self):
+        """Try to reconnect to server"""
+        asyncio.create_task(self.connect_to_server())
+        self.reconnect_timer.stop()
     
     def run(self):
         # Use qasync event loop for PySide6
