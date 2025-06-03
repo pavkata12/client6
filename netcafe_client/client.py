@@ -466,8 +466,10 @@ class NetCafeClient:
         self.blank.set_status(status)
     
     def run(self):
-        asyncio.create_task(self.connect_to_server())
-        self.loop.run_forever()
+        # Use qasync event loop for PySide6
+        with self.loop:
+            self.loop.create_task(self.connect_to_server())
+            self.loop.run_forever()
 
 def main():
     client = NetCafeClient()
