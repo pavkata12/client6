@@ -229,22 +229,22 @@ class NetCafeClient:
         return f"{hostname}_{mac}"
         
     def _init_tray(self):
-        self.tray = QSystemTrayIcon(self)
+        self.tray = QSystemTrayIcon()
         self.tray.setIcon(QIcon('icon.ico'))  # Add an icon if available
         
         menu = QMenu()
         
-        status_action = QAction('Status: Disconnected', self)
+        status_action = QAction('Status: Disconnected')
         status_action.setEnabled(False)
         menu.addAction(status_action)
         
         menu.addSeparator()
         
-        show_action = QAction('Show Timer', self)
+        show_action = QAction('Show Timer')
         show_action.triggered.connect(self._show_overlay)
         menu.addAction(show_action)
         
-        exit_action = QAction('Exit', self)
+        exit_action = QAction('Exit')
         exit_action.triggered.connect(self._exit)
         menu.addAction(exit_action)
         
