@@ -4,7 +4,8 @@
       "port": 8080,
       "websocket_endpoint": "/ws",
       "reconnect_interval": 5,
-      "max_reconnect_attempts": 10
+      "max_reconnect_attempts": 10,
+      "fallback_hosts": ["127.0.0.1", "192.168.0.100"]
     },
     "client": {
       "auto_start": true,

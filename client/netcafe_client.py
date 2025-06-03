@@ -27,7 +27,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('client.log'),
+        logging.FileHandler('client.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -382,6 +382,9 @@ class NetCafeClient:
         self.loop = qasync.QEventLoop(self.app)
         asyncio.set_event_loop(self.loop)
         
+        # Load configuration
+        self.config = self._load_config()
+        
         # Components
         self.timer_overlay = TimerOverlay()
         self.lock_screen = LockScreen()
@@ -392,13 +395,17 @@ class NetCafeClient:
         self.remaining_time = 0
         self.session_id = None
         self.computer_id = self._get_computer_id()
-        self.server_url = 'http://localhost:8080'
+        
+        # Server configuration
+        self.server_hosts = [self.config['server']['host']] + self.config['server'].get('fallback_hosts', [])
+        self.server_port = self.config['server']['port']
+        self.current_host_index = 0
         
         # Network
         self.session = None
         self.ws = None
         self.reconnect_attempts = 0
-        self.max_reconnect_attempts = 10
+        self.max_reconnect_attempts = self.config['server']['max_reconnect_attempts']
         
         # Timers
         self.session_timer = QTimer()
@@ -424,6 +431,30 @@ class NetCafeClient:
         
         # Set initial status
         self.set_status('Initializing...', False)
+    
+    def _load_config(self):
+        """Load configuration from config.json"""
+        try:
+            with open('config.json', 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load config.json: {e}, using defaults")
+            return {
+                "server": {
+                    "host": "localhost",
+                    "port": 8080,
+                    "websocket_endpoint": "/ws",
+                    "max_reconnect_attempts": 10,
+                    "fallback_hosts": ["127.0.0.1"]
+                }
+            }
+    
+    def _get_current_server_url(self):
+        """Get current server URL based on host index"""
+        if self.current_host_index < len(self.server_hosts):
+            host = self.server_hosts[self.current_host_index]
+            return f"http://{host}:{self.server_port}"
+        return f"http://{self.server_hosts[0]}:{self.server_port}"
     
     def _get_computer_id(self):
         try:
@@ -539,7 +570,8 @@ class NetCafeClient:
             return
         
         try:
-            logger.info(f"Connecting to server: {self.server_url}")
+            server_url = self._get_current_server_url()
+            logger.info(f"Connecting to server: {server_url}")
             self.set_status('Connecting to server...', False)
             
             if self.session:
@@ -548,14 +580,15 @@ class NetCafeClient:
             self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
             
             # Test connection
-            async with self.session.get(f'{self.server_url}/api/status') as response:
+            async with self.session.get(f'{server_url}/api/status') as response:
                 if response.status == 200:
                     logger.info("Server is reachable")
                 else:
                     raise Exception(f"Server status: {response.status}")
             
             # Connect WebSocket
-            ws_url = f"ws://localhost:8080/ws?computer_id={self.computer_id}"
+            host = self.server_hosts[self.current_host_index]
+            ws_url = f"ws://{host}:{self.server_port}/ws?computer_id={self.computer_id}"
             self.ws = await self.session.ws_connect(ws_url)
             logger.info("WebSocket connected")
             
@@ -570,6 +603,14 @@ class NetCafeClient:
         except Exception as e:
             logger.error(f"Connection error: {e}")
             self.reconnect_attempts += 1
+            
+            # Try next host if available
+            if self.current_host_index < len(self.server_hosts) - 1:
+                self.current_host_index += 1
+                logger.info(f"Trying next host: {self.server_hosts[self.current_host_index]}")
+            else:
+                self.current_host_index = 0  # Reset to first host
+            
             self.set_status(f'Connection failed (attempt {self.reconnect_attempts})', False)
             
             if self.session:
@@ -599,7 +640,8 @@ class NetCafeClient:
             
             logger.info(f"Authenticating user: {username}")
             
-            async with self.session.post(f'{self.server_url}/api/login', json=login_data) as response:
+            server_url = self._get_current_server_url()
+            async with self.session.post(f'{server_url}/api/login', json=login_data) as response:
                 if response.status == 200:
                     data = await response.json()
                     if data.get('success'):
@@ -659,7 +701,8 @@ class NetCafeClient:
                 }
                 
                 try:
-                    async with self.session.post(f'{self.server_url}/api/logout', json=logout_data) as response:
+                    server_url = self._get_current_server_url()
+                    async with self.session.post(f'{server_url}/api/logout', json=logout_data) as response:
                         if response.status == 200:
                             logger.info("Logout successful")
                         else:
@@ -780,7 +823,7 @@ class NetCafeClient:
         self.reconnect_timer.stop()
     
     def run(self):
-        logger.info("🎮 Starting NetCafe Pro 2.0 Gaming Client")
+        logger.info("Starting NetCafe Pro 2.0 Gaming Client")
         
         try:
             with self.loop:
